@@ -195,6 +195,7 @@ export type Database = {
           is_public: boolean | null
           is_template: boolean | null
           name: string
+          notes: string | null
           template_type: string | null
           updated_at: string
           user_id: string
@@ -206,6 +207,7 @@ export type Database = {
           is_public?: boolean | null
           is_template?: boolean | null
           name: string
+          notes?: string | null
           template_type?: string | null
           updated_at?: string
           user_id: string
@@ -217,6 +219,7 @@ export type Database = {
           is_public?: boolean | null
           is_template?: boolean | null
           name?: string
+          notes?: string | null
           template_type?: string | null
           updated_at?: string
           user_id?: string

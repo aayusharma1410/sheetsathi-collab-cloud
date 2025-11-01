@@ -1,5 +1,5 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
-import { MessageSquarePlus, Undo, Redo, Trash2, Clock } from "lucide-react";
+import { MessageSquarePlus, Undo, Redo, Trash2, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -39,8 +39,11 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
     action: string;
     row_index: number | null;
     col_index: number | null;
+    old_value: string | null;
+    new_value: string | null;
     created_at: string;
   }>>([]);
+  const [notes, setNotes] = useState("");
 
   const columnLabels = Array.from({ length: cols }, (_, i) => 
     String.fromCharCode(65 + i)
@@ -53,6 +56,7 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
   useEffect(() => {
     loadCells();
     loadActivityLog();
+    loadNotes();
     subscribeToChanges();
   }, [spreadsheetId]);
 
@@ -97,6 +101,8 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
         action,
         row_index,
         col_index,
+        old_value,
+        new_value,
         created_at,
         user_id
       `)
@@ -122,6 +128,41 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
       ...log,
       user_email: emailMap.get(log.user_id) || 'Unknown'
     })) || []);
+  };
+
+  const loadNotes = async () => {
+    const { data, error } = await supabase
+      .from('spreadsheets')
+      .select('notes')
+      .eq('id', spreadsheetId)
+      .single();
+
+    if (error) {
+      console.error("Error loading notes:", error);
+      return;
+    }
+
+    setNotes(data?.notes || '');
+  };
+
+  const saveNotes = async (newNotes: string) => {
+    if (!canEdit) {
+      toast.error("You don't have permission to edit notes");
+      return;
+    }
+
+    const { error } = await supabase
+      .from('spreadsheets')
+      .update({ notes: newNotes })
+      .eq('id', spreadsheetId);
+
+    if (error) {
+      console.error("Error saving notes:", error);
+      toast.error("Failed to save notes");
+      return;
+    }
+
+    toast.success("Notes saved");
   };
 
   const subscribeToChanges = () => {
@@ -569,30 +610,56 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
         ))}
         </div>
 
+        {/* Notes Section */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Notes</h3>
+          </div>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={() => saveNotes(notes)}
+            placeholder="Add notes about this spreadsheet..."
+            rows={4}
+            disabled={!canEdit}
+            className="resize-none"
+          />
+        </div>
+
         {/* Activity Log */}
         <div className="bg-card border border-border rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
-          <Clock className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Recent Activity</h3>
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Recent Activity</h3>
           </div>
           <ScrollArea className="h-32">
-          {activityLog.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No activity yet</p>
-          ) : (
-            <div className="space-y-2">
-              {activityLog.map((log) => (
-                <div key={log.id} className="text-xs flex items-start gap-2 pb-2 border-b border-border last:border-0">
-                  <div className="flex-1">
-                    <span className="font-medium text-foreground">{log.user_email}</span>
-                    <span className="text-muted-foreground"> {log.action}</span>
+            {activityLog.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity yet</p>
+            ) : (
+              <div className="space-y-2">
+                {activityLog.map((log) => (
+                  <div key={log.id} className="text-xs flex flex-col gap-1 pb-2 border-b border-border last:border-0">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <span className="font-medium text-foreground">{log.user_email}</span>
+                        <span className="text-muted-foreground"> {log.action}</span>
+                      </div>
+                      <span className="text-muted-foreground whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {log.old_value !== null && log.new_value !== null && (
+                      <div className="text-muted-foreground ml-0">
+                        <span className="line-through">{log.old_value || '(empty)'}</span>
+                        <span className="mx-1">→</span>
+                        <span className="text-foreground font-medium">{log.new_value}</span>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
           </ScrollArea>
         </div>
       </div>
