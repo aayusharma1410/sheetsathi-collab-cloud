@@ -56,10 +56,18 @@ const Sheet = () => {
   }, [navigate, id]);
 
   const loadSpreadsheet = async (currentUser?: SupabaseUser) => {
-    if (!id) return;
+    if (!id) {
+      console.log("No spreadsheet ID provided");
+      return;
+    }
     
     const activeUser = currentUser || user;
-    if (!activeUser) return;
+    if (!activeUser) {
+      console.log("No active user found");
+      return;
+    }
+
+    console.log("Loading spreadsheet:", id, "for user:", activeUser.id);
 
     const { data, error } = await supabase
       .from('spreadsheets')
@@ -74,37 +82,52 @@ const Sheet = () => {
     }
 
     if (!data) {
+      console.log("Spreadsheet not found");
       toast.error("Spreadsheet not found");
       navigate("/dashboard");
       return;
     }
 
+    console.log("Spreadsheet data loaded:", data);
+    console.log("Spreadsheet owner:", data.user_id, "Current user:", activeUser.id);
+
     setSheetName(data.name);
     setAccessCode(data.access_code);
-    setIsOwner(data.user_id === activeUser.id);
+    const isUserOwner = data.user_id === activeUser.id;
+    setIsOwner(isUserOwner);
 
     // Check if user is owner
-    if (data.user_id === activeUser.id) {
+    if (isUserOwner) {
+      console.log("User is owner - granting edit permission");
       setCanEdit(true);
+      toast.success("You can edit this spreadsheet");
       return;
     }
 
     // Check if user has edit permission
-    const { data: permission } = await supabase
+    const { data: permission, error: permError } = await supabase
       .from('spreadsheet_permissions')
       .select('permission_level')
       .eq('spreadsheet_id', id)
       .eq('user_id', activeUser.id)
       .maybeSingle();
 
+    console.log("Permission check:", permission, permError);
+
     if (permission?.permission_level === 'edit') {
+      console.log("User has edit permission");
       setCanEdit(true);
+      toast.success("You can edit this spreadsheet");
       return;
     }
 
     // If spreadsheet has access code, show dialog
     if (data.access_code && !permission) {
+      console.log("Spreadsheet requires access code");
       setShowAccessDialog(true);
+    } else {
+      console.log("User has view-only access");
+      toast.info("Viewing in read-only mode");
     }
   };
 
