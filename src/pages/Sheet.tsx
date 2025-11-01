@@ -55,6 +55,33 @@ const Sheet = () => {
     return () => subscription.unsubscribe();
   }, [navigate, id]);
 
+  // Listen for permission changes in realtime
+  useEffect(() => {
+    if (!id || !user) return;
+
+    const channel = supabase
+      .channel(`permissions-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'spreadsheet_permissions',
+          filter: `spreadsheet_id=eq.${id}`,
+        },
+        (payload) => {
+          console.log('Permission change detected:', payload);
+          // Reload spreadsheet permissions when they change
+          loadSpreadsheet(user);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, user]);
+
   const loadSpreadsheet = async (currentUser?: SupabaseUser) => {
     if (!id) {
       console.log("No spreadsheet ID provided");
