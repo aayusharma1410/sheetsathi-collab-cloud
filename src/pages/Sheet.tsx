@@ -127,11 +127,10 @@ const Sheet = () => {
     if (isUserOwner) {
       console.log("User is owner - granting edit permission");
       setCanEdit(true);
-      toast.success("You can edit this spreadsheet");
       return;
     }
 
-    // Check if user has edit permission
+    // Check if user has edit permission (for shared users)
     const { data: permission, error: permError } = await supabase
       .from('spreadsheet_permissions')
       .select('permission_level')
@@ -139,22 +138,28 @@ const Sheet = () => {
       .eq('user_id', activeUser.id)
       .maybeSingle();
 
-    console.log("Permission check:", permission, permError);
+    console.log("Permission check for shared user:", permission, permError);
 
     if (permission?.permission_level === 'edit') {
-      console.log("User has edit permission");
+      console.log("User has edit permission - granting access");
       setCanEdit(true);
-      toast.success("You can edit this spreadsheet");
       return;
     }
 
-    // If spreadsheet has access code, show dialog
+    if (permission?.permission_level === 'view') {
+      console.log("User has view-only permission");
+      setCanEdit(false);
+      return;
+    }
+
+    // If spreadsheet has access code and user has no explicit permission, show dialog
     if (data.access_code && !permission) {
       console.log("Spreadsheet requires access code");
       setShowAccessDialog(true);
+      setCanEdit(false);
     } else {
-      console.log("User has view-only access");
-      toast.info("Viewing in read-only mode");
+      console.log("User has no access - view-only mode");
+      setCanEdit(false);
     }
   };
 
