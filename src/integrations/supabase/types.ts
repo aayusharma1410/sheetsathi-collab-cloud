@@ -14,7 +14,112 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cells: {
+        Row: {
+          col_index: number
+          created_at: string
+          format: Json | null
+          formula: string | null
+          id: string
+          row_index: number
+          spreadsheet_id: string
+          updated_at: string
+          value: string | null
+        }
+        Insert: {
+          col_index: number
+          created_at?: string
+          format?: Json | null
+          formula?: string | null
+          id?: string
+          row_index: number
+          spreadsheet_id: string
+          updated_at?: string
+          value?: string | null
+        }
+        Update: {
+          col_index?: number
+          created_at?: string
+          format?: Json | null
+          formula?: string | null
+          id?: string
+          row_index?: number
+          spreadsheet_id?: string
+          updated_at?: string
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cells_spreadsheet_id_fkey"
+            columns: ["spreadsheet_id"]
+            isOneToOne: false
+            referencedRelation: "spreadsheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          cell_id: string
+          comment: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          cell_id: string
+          comment: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          cell_id?: string
+          comment?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spreadsheets: {
+        Row: {
+          created_at: string
+          id: string
+          is_template: boolean | null
+          name: string
+          template_type: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_template?: boolean | null
+          name: string
+          template_type?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_template?: boolean | null
+          name?: string
+          template_type?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

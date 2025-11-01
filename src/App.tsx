@@ -7,6 +7,9 @@ import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Sheet from "./pages/Sheet";
+import Templates from "./pages/Templates";
+import AllSpreadsheets from "./pages/AllSpreadsheets";
+import Shortcuts from "./pages/Shortcuts";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +25,9 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/sheet/:id" element={<Sheet />} />
+          <Route path="/templates" element={<Templates />} />
+          <Route path="/all-spreadsheets" element={<AllSpreadsheets />} />
+          <Route path="/shortcuts" element={<Shortcuts />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

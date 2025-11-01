@@ -6,6 +6,8 @@ import { FileSpreadsheet, ArrowLeft, Save, Download, Share2, Users } from "lucid
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import SpreadsheetGrid from "@/components/SpreadsheetGrid";
+import { exportToCSV } from "@/lib/exportUtils";
 
 const Sheet = () => {
   const navigate = useNavigate();
@@ -13,13 +15,10 @@ const Sheet = () => {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [sheetName, setSheetName] = useState("Untitled Spreadsheet");
   const [isEditingName, setIsEditingName] = useState(false);
+  const [selectedFormula, setSelectedFormula] = useState("");
 
-  // Create a simple grid (10 rows x 10 columns for now)
   const rows = 20;
   const cols = 10;
-  const columnLabels = Array.from({ length: cols }, (_, i) => 
-    String.fromCharCode(65 + i)
-  );
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -31,6 +30,7 @@ const Sheet = () => {
       }
 
       setUser(session.user);
+      loadSpreadsheet();
     };
 
     checkAuth();
@@ -46,18 +46,72 @@ const Sheet = () => {
     );
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, id]);
 
-  const handleSave = () => {
+  const loadSpreadsheet = async () => {
+    if (!id) return;
+
+    const { data, error } = await supabase
+      .from('spreadsheets')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      toast.error("Failed to load spreadsheet");
+      return;
+    }
+
+    setSheetName(data.name);
+  };
+
+  const handleSave = async () => {
+    if (!id) return;
+
+    const { error } = await supabase
+      .from('spreadsheets')
+      .update({ 
+        name: sheetName,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error("Failed to save");
+      return;
+    }
+
     toast.success("Spreadsheet saved successfully!");
   };
 
   const handleShare = () => {
-    toast.info("Sharing features coming soon!");
+    navigator.clipboard.writeText(window.location.href);
+    toast.success("Link copied to clipboard!");
   };
 
-  const handleDownload = () => {
-    toast.info("Export features coming soon!");
+  const handleDownload = async () => {
+    if (!id) return;
+
+    const { data } = await supabase
+      .from('cells')
+      .select('*')
+      .eq('spreadsheet_id', id);
+
+    if (!data) return;
+
+    const cellsData = data.map(cell => ({
+      row: cell.row_index,
+      col: cell.col_index,
+      value: cell.value || ''
+    }));
+
+    exportToCSV(cellsData, rows, cols, sheetName);
+    toast.success("Exported successfully!");
+  };
+
+  const insertFormula = (formula: string) => {
+    setSelectedFormula(formula);
+    toast.info(`Click a cell and type: ${formula}`);
   };
 
   return (
@@ -120,15 +174,27 @@ const Sheet = () => {
           </div>
 
           {/* Toolbar */}
-          <div className="flex items-center gap-2 text-sm">
-            <Button variant="ghost" size="sm">
-              <strong>B</strong>
+          <div className="flex items-center gap-2 text-sm flex-wrap">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => insertFormula('=SUM(A1:A10)')}
+            >
+              SUM
             </Button>
-            <Button variant="ghost" size="sm">
-              <em>I</em>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => insertFormula('=AVERAGE(A1:A10)')}
+            >
+              AVG
             </Button>
-            <Button variant="ghost" size="sm">
-              <span className="underline">U</span>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => insertFormula('=COUNT(A1:A10)')}
+            >
+              COUNT
             </Button>
             <div className="h-6 w-px bg-border mx-1" />
             <select className="h-8 px-2 rounded-md border border-input bg-background text-sm">
@@ -146,59 +212,30 @@ const Sheet = () => {
         </div>
       </header>
 
-      {/* Spreadsheet Grid */}
-      <main className="flex-1 overflow-auto p-4 bg-muted/20">
-        <div className="inline-block min-w-full">
-          <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
-            {/* Column Headers */}
-            <div className="flex sticky top-0 z-10 bg-secondary">
-              <div className="w-12 h-10 border-r border-b border-border flex items-center justify-center text-xs font-medium bg-secondary" />
-              {columnLabels.map((label) => (
-                <div
-                  key={label}
-                  className="w-32 h-10 border-r border-b border-border flex items-center justify-center text-sm font-medium"
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-
-            {/* Rows */}
-            {Array.from({ length: rows }, (_, rowIndex) => (
-              <div key={rowIndex} className="flex hover:bg-accent/5">
-                {/* Row Number */}
-                <div className="w-12 h-10 border-r border-b border-border flex items-center justify-center text-xs font-medium bg-secondary">
-                  {rowIndex + 1}
-                </div>
-                {/* Cells */}
-                {Array.from({ length: cols }, (_, colIndex) => (
-                  <div
-                    key={`${rowIndex}-${colIndex}`}
-                    className="w-32 h-10 border-r border-b border-border"
-                  >
-                    <input
-                      type="text"
-                      className="w-full h-full px-2 bg-transparent focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:z-10 relative"
-                      placeholder=""
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
-
       {/* Formula Bar */}
-      <div className="border-t border-border bg-card p-2">
+      <div className="border-b border-border bg-card p-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-muted-foreground w-16">fx</span>
           <Input 
             placeholder="Enter formula or value..." 
             className="flex-1"
+            value={selectedFormula}
+            onChange={(e) => setSelectedFormula(e.target.value)}
           />
         </div>
       </div>
+
+      {/* Spreadsheet Grid */}
+      <main className="flex-1 overflow-auto p-4 bg-muted/20">
+        {id && (
+          <SpreadsheetGrid 
+            spreadsheetId={id}
+            rows={rows}
+            cols={cols}
+            onCellUpdate={handleSave}
+          />
+        )}
+      </main>
     </div>
   );
 };
