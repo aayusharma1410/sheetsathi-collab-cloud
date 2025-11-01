@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          action: string
+          col_index: number | null
+          created_at: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          row_index: number | null
+          spreadsheet_id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          col_index?: number | null
+          created_at?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          row_index?: number | null
+          spreadsheet_id: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          col_index?: number | null
+          created_at?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          row_index?: number | null
+          spreadsheet_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_spreadsheet_id_fkey"
+            columns: ["spreadsheet_id"]
+            isOneToOne: false
+            referencedRelation: "spreadsheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cells: {
         Row: {
           col_index: number

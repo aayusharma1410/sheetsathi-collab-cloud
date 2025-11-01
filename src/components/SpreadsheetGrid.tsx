@@ -1,5 +1,5 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
-import { MessageSquarePlus, Undo, Redo, Trash2 } from "lucide-react";
+import { MessageSquarePlus, Undo, Redo, Trash2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { evaluateFormula } from "@/lib/formulaEngine";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type CellType = {
   id?: string;
@@ -32,6 +33,14 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
   const [history, setHistory] = useState<Record<string, CellType>[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [pendingChanges, setPendingChanges] = useState<Set<string>>(new Set());
+  const [activityLog, setActivityLog] = useState<Array<{
+    id: string;
+    user_email: string;
+    action: string;
+    row_index: number | null;
+    col_index: number | null;
+    created_at: string;
+  }>>([]);
 
   const columnLabels = Array.from({ length: cols }, (_, i) => 
     String.fromCharCode(65 + i)
@@ -43,6 +52,7 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
 
   useEffect(() => {
     loadCells();
+    loadActivityLog();
     subscribeToChanges();
   }, [spreadsheetId]);
 
@@ -79,6 +89,41 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
     setCells(cellsMap);
   };
 
+  const loadActivityLog = async () => {
+    const { data, error } = await supabase
+      .from('activity_log')
+      .select(`
+        id,
+        action,
+        row_index,
+        col_index,
+        created_at,
+        user_id
+      `)
+      .eq('spreadsheet_id', spreadsheetId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error("Error loading activity log:", error);
+      return;
+    }
+
+    // Fetch user emails
+    const userIds = [...new Set(data?.map(log => log.user_id) || [])];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .in('id', userIds);
+
+    const emailMap = new Map(profiles?.map(p => [p.id, p.email || 'Unknown']) || []);
+
+    setActivityLog(data?.map(log => ({
+      ...log,
+      user_email: emailMap.get(log.user_id) || 'Unknown'
+    })) || []);
+  };
+
   const subscribeToChanges = () => {
     const channel = supabase
       .channel('cells-changes')
@@ -101,7 +146,7 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
     };
   };
 
-  const handleCellChange = (rowIndex: number, colIndex: number, value: string) => {
+  const handleCellChange = async (rowIndex: number, colIndex: number, value: string) => {
     console.log("Attempting to edit cell - canEdit:", canEdit);
     
     if (!canEdit) {
@@ -111,6 +156,7 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
     }
 
     const key = `${rowIndex}-${colIndex}`;
+    const oldValue = cells[key]?.value || '';
     
     // Save to history
     if (historyIndex < history.length - 1) {
@@ -139,6 +185,25 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
 
     // Mark as pending change (will save when user clicks Save)
     setPendingChanges(prev => new Set(prev).add(key));
+    
+    // Log activity
+    if (oldValue !== displayValue) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const columnLabel = String.fromCharCode(65 + colIndex);
+      
+      await supabase.from('activity_log').insert({
+        spreadsheet_id: spreadsheetId,
+        user_id: user?.id,
+        action: `Edited cell ${columnLabel}${rowIndex + 1}`,
+        row_index: rowIndex,
+        col_index: colIndex,
+        old_value: oldValue,
+        new_value: displayValue
+      });
+      
+      loadActivityLog();
+    }
+    
     onCellUpdate?.();
   };
 
@@ -343,10 +408,11 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
   };
 
   return (
-    <div className="inline-block min-w-full">
-      {/* Toolbar */}
-      <div className="mb-4 flex gap-2 items-center">
-        <Button
+    <div className="space-y-6">
+      <div className="inline-block min-w-full">
+        {/* Toolbar */}
+        <div className="mb-4 flex gap-2 items-center">
+          <Button
           variant="outline"
           size="sm"
           onClick={undo}
@@ -380,9 +446,9 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
             Save Changes
           </Button>
         )}
-      </div>
+        </div>
 
-      <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
         {/* Column Headers */}
         <div className="flex sticky top-0 z-10 bg-secondary">
           <div className="w-12 h-10 border-r border-b border-border flex items-center justify-center text-xs font-medium bg-secondary" />
@@ -501,6 +567,34 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
             })}
           </div>
         ))}
+        </div>
+
+        {/* Activity Log */}
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold">Recent Activity</h3>
+          </div>
+          <ScrollArea className="h-32">
+          {activityLog.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No activity yet</p>
+          ) : (
+            <div className="space-y-2">
+              {activityLog.map((log) => (
+                <div key={log.id} className="text-xs flex items-start gap-2 pb-2 border-b border-border last:border-0">
+                  <div className="flex-1">
+                    <span className="font-medium text-foreground">{log.user_email}</span>
+                    <span className="text-muted-foreground"> {log.action}</span>
+                  </div>
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          </ScrollArea>
+        </div>
       </div>
     </div>
   );
