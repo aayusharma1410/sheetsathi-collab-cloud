@@ -184,7 +184,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_access_spreadsheet: {
+        Args: { _spreadsheet_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_edit_spreadsheet: {
+        Args: { _spreadsheet_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

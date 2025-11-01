@@ -241,6 +241,12 @@ const Sheet = () => {
             <Button variant="ghost" size="sm" onClick={() => insertFormula('=ROUND(A1,2)')}>ROUND</Button>
             <Button variant="ghost" size="sm" onClick={() => insertFormula('=IF(A1>0,"Yes","No")')}>IF</Button>
             <Button variant="ghost" size="sm" onClick={() => insertFormula('=VLOOKUP("value",A1:B10,2)')}>VLOOKUP</Button>
+            <Button variant="ghost" size="sm" onClick={() => insertFormula('=ABS(A1)')}>ABS</Button>
+            <Button variant="ghost" size="sm" onClick={() => insertFormula('=SQRT(A1)')}>SQRT</Button>
+            <Button variant="ghost" size="sm" onClick={() => insertFormula('=POWER(A1,2)')}>POWER</Button>
+            <Button variant="ghost" size="sm" onClick={() => insertFormula('=MOD(A1,2)')}>MOD</Button>
+            <Button variant="ghost" size="sm" onClick={() => insertFormula('=CEILING(A1)')}>CEILING</Button>
+            <Button variant="ghost" size="sm" onClick={() => insertFormula('=FLOOR(A1)')}>FLOOR</Button>
           </div>
         </div>
       </header>

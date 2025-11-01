@@ -26,6 +26,72 @@ const Shortcuts = () => {
       example: '=COUNT(C1:C20) counts filled cells'
     },
     {
+      name: 'MIN / MAX',
+      syntax: '=MIN(A1:A10) / =MAX(A1:A10)',
+      description: 'Find minimum or maximum value',
+      example: '=MIN(A1:A10) or =MAX(B1:B10)'
+    },
+    {
+      name: 'PRODUCT',
+      syntax: '=PRODUCT(A1:A5)',
+      description: 'Multiplies all numbers in a range',
+      example: '=PRODUCT(A1:A3) multiplies A1*A2*A3'
+    },
+    {
+      name: 'ROUND',
+      syntax: '=ROUND(A1,2)',
+      description: 'Rounds to specified decimal places',
+      example: '=ROUND(3.14159,2) returns 3.14'
+    },
+    {
+      name: 'IF',
+      syntax: '=IF(A1>0,"Yes","No")',
+      description: 'Conditional logic',
+      example: '=IF(B1>100,"High","Low")'
+    },
+    {
+      name: 'VLOOKUP',
+      syntax: '=VLOOKUP("value",A1:B10,2)',
+      description: 'Look up value in table',
+      example: '=VLOOKUP("Apple",A1:C10,3)'
+    },
+    {
+      name: 'ABS',
+      syntax: '=ABS(A1)',
+      description: 'Absolute value',
+      example: '=ABS(-5) returns 5'
+    },
+    {
+      name: 'SQRT',
+      syntax: '=SQRT(A1)',
+      description: 'Square root',
+      example: '=SQRT(16) returns 4'
+    },
+    {
+      name: 'POWER',
+      syntax: '=POWER(A1,2)',
+      description: 'Raise to power',
+      example: '=POWER(5,2) returns 25'
+    },
+    {
+      name: 'MOD',
+      syntax: '=MOD(A1,2)',
+      description: 'Remainder after division',
+      example: '=MOD(10,3) returns 1'
+    },
+    {
+      name: 'CEILING',
+      syntax: '=CEILING(A1)',
+      description: 'Round up to nearest integer',
+      example: '=CEILING(3.2) returns 4'
+    },
+    {
+      name: 'FLOOR',
+      syntax: '=FLOOR(A1)',
+      description: 'Round down to nearest integer',
+      example: '=FLOOR(3.8) returns 3'
+    },
+    {
       name: 'Basic Math',
       syntax: '=A1+B1',
       description: 'Perform arithmetic operations',

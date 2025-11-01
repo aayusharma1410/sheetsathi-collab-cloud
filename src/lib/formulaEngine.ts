@@ -131,6 +131,74 @@ export const evaluateFormula = (formula: string, allCells: CellData): string => 
       }
     }
 
+    // ABS function
+    if (formulaContent.startsWith('ABS(')) {
+      const match = formulaContent.match(/ABS\((.*?)\)/);
+      if (match) {
+        const value = parseFloat(match[1].trim());
+        if (!isNaN(value)) {
+          return Math.abs(value).toString();
+        }
+      }
+    }
+
+    // SQRT function
+    if (formulaContent.startsWith('SQRT(')) {
+      const match = formulaContent.match(/SQRT\((.*?)\)/);
+      if (match) {
+        const value = parseFloat(match[1].trim());
+        if (!isNaN(value) && value >= 0) {
+          return Math.sqrt(value).toString();
+        }
+      }
+    }
+
+    // POWER function
+    if (formulaContent.startsWith('POWER(')) {
+      const match = formulaContent.match(/POWER\((.*?),(.*?)\)/);
+      if (match) {
+        const base = parseFloat(match[1].trim());
+        const exponent = parseFloat(match[2].trim());
+        if (!isNaN(base) && !isNaN(exponent)) {
+          return Math.pow(base, exponent).toString();
+        }
+      }
+    }
+
+    // MOD function
+    if (formulaContent.startsWith('MOD(')) {
+      const match = formulaContent.match(/MOD\((.*?),(.*?)\)/);
+      if (match) {
+        const dividend = parseFloat(match[1].trim());
+        const divisor = parseFloat(match[2].trim());
+        if (!isNaN(dividend) && !isNaN(divisor) && divisor !== 0) {
+          return (dividend % divisor).toString();
+        }
+      }
+    }
+
+    // CEILING function
+    if (formulaContent.startsWith('CEILING(')) {
+      const match = formulaContent.match(/CEILING\((.*?)\)/);
+      if (match) {
+        const value = parseFloat(match[1].trim());
+        if (!isNaN(value)) {
+          return Math.ceil(value).toString();
+        }
+      }
+    }
+
+    // FLOOR function
+    if (formulaContent.startsWith('FLOOR(')) {
+      const match = formulaContent.match(/FLOOR\((.*?)\)/);
+      if (match) {
+        const value = parseFloat(match[1].trim());
+        if (!isNaN(value)) {
+          return Math.floor(value).toString();
+        }
+      }
+    }
+
     // Simple arithmetic operations
     if (/^[\d\s\+\-\*\/\(\)\.]+$/.test(formulaContent)) {
       const result = eval(formulaContent);
