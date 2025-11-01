@@ -115,18 +115,23 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
       return;
     }
 
-    // Fetch user display names
+    // Fetch user display names and emails
     const userIds = [...new Set(data?.map(log => log.user_id) || [])];
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, display_name, email')
       .in('id', userIds);
 
-    const nameMap = new Map(profiles?.map(p => [p.id, p.display_name || p.email || 'Unknown']) || []);
+    const nameMap = new Map(
+      profiles?.map(p => [
+        p.id, 
+        p.display_name || p.email?.split('@')[0] || 'User'
+      ]) || []
+    );
 
     setActivityLog(data?.map(log => ({
       ...log,
-      user_name: nameMap.get(log.user_id) || 'Unknown'
+      user_name: nameMap.get(log.user_id) || 'User'
     })) || []);
   };
 
