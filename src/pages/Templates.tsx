@@ -101,9 +101,16 @@ const Templates = () => {
           is_template: false
         })
         .select()
-        .single();
+        .maybeSingle();
 
-      if (sheetError) throw sheetError;
+      if (sheetError) {
+        console.error('Error creating spreadsheet:', sheetError);
+        throw sheetError;
+      }
+
+      if (!spreadsheet) {
+        throw new Error('No spreadsheet returned');
+      }
 
       // Insert template cells
       const cellsToInsert = template.data.cells.map(cell => ({
@@ -133,28 +140,39 @@ const Templates = () => {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('spreadsheets')
-      .insert({
-        name: customTemplateName,
-        user_id: user.id,
-        is_template: true,
-        is_public: true,
-        access_code: customAccessCode.trim() || null
-      })
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('spreadsheets')
+        .insert({
+          name: customTemplateName,
+          user_id: user.id,
+          is_template: true,
+          is_public: true,
+          access_code: customAccessCode.trim() || null
+        })
+        .select()
+        .maybeSingle();
 
-    if (error) {
+      if (error) {
+        console.error('Error creating template:', error);
+        toast.error("Failed to create template");
+        return;
+      }
+
+      if (!data) {
+        toast.error("Failed to create template");
+        return;
+      }
+
+      toast.success("Template created! Redirecting to edit...");
+      setIsDialogOpen(false);
+      setCustomTemplateName("");
+      setCustomAccessCode("");
+      navigate(`/sheet/${data.id}`);
+    } catch (err) {
+      console.error('Unexpected error:', err);
       toast.error("Failed to create template");
-      return;
     }
-
-    toast.success("Template created! Redirecting to edit...");
-    setIsDialogOpen(false);
-    setCustomTemplateName("");
-    setCustomAccessCode("");
-    navigate(`/sheet/${data.id}`);
   };
 
   return (

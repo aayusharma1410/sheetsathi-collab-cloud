@@ -69,21 +69,32 @@ const AllSpreadsheets = () => {
   };
 
   const createNewSpreadsheet = async () => {
-    const { data, error } = await supabase
-      .from('spreadsheets')
-      .insert({
-        user_id: user!.id,
-        name: 'Untitled Spreadsheet'
-      })
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('spreadsheets')
+        .insert({
+          user_id: user!.id,
+          name: 'Untitled Spreadsheet'
+        })
+        .select()
+        .maybeSingle();
 
-    if (error) {
+      if (error) {
+        console.error('Error creating spreadsheet:', error);
+        toast.error("Failed to create spreadsheet");
+        return;
+      }
+
+      if (!data) {
+        toast.error("Failed to create spreadsheet");
+        return;
+      }
+
+      navigate(`/sheet/${data.id}`);
+    } catch (err) {
+      console.error('Unexpected error:', err);
       toast.error("Failed to create spreadsheet");
-      return;
     }
-
-    navigate(`/sheet/${data.id}`);
   };
 
   return (
