@@ -37,7 +37,7 @@ const Sheet = () => {
       }
 
       setUser(session.user);
-      loadSpreadsheet();
+      await loadSpreadsheet(session.user);
     };
 
     checkAuth();
@@ -55,26 +55,36 @@ const Sheet = () => {
     return () => subscription.unsubscribe();
   }, [navigate, id]);
 
-  const loadSpreadsheet = async () => {
-    if (!id || !user) return;
+  const loadSpreadsheet = async (currentUser?: SupabaseUser) => {
+    if (!id) return;
+    
+    const activeUser = currentUser || user;
+    if (!activeUser) return;
 
     const { data, error } = await supabase
       .from('spreadsheets')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (error) {
+      console.error("Error loading spreadsheet:", error);
       toast.error("Failed to load spreadsheet");
+      return;
+    }
+
+    if (!data) {
+      toast.error("Spreadsheet not found");
+      navigate("/dashboard");
       return;
     }
 
     setSheetName(data.name);
     setAccessCode(data.access_code);
-    setIsOwner(data.user_id === user.id);
+    setIsOwner(data.user_id === activeUser.id);
 
     // Check if user is owner
-    if (data.user_id === user.id) {
+    if (data.user_id === activeUser.id) {
       setCanEdit(true);
       return;
     }
@@ -84,8 +94,8 @@ const Sheet = () => {
       .from('spreadsheet_permissions')
       .select('permission_level')
       .eq('spreadsheet_id', id)
-      .eq('user_id', user.id)
-      .single();
+      .eq('user_id', activeUser.id)
+      .maybeSingle();
 
     if (permission?.permission_level === 'edit') {
       setCanEdit(true);
