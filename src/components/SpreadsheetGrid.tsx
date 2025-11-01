@@ -2,6 +2,7 @@ import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { MessageSquarePlus, Undo, Redo, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -48,10 +49,19 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
   const loadCells = async () => {
     const { data, error } = await supabase
       .from('cells')
-      .select('*')
+      .select(`
+        *,
+        comments (
+          id,
+          comment,
+          created_at,
+          user_id
+        )
+      `)
       .eq('spreadsheet_id', spreadsheetId);
 
     if (error) {
+      console.error("Error loading cells:", error);
       toast.error("Failed to load cells");
       return;
     }
@@ -63,6 +73,7 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
         id: cell.id,
         value: cell.value || '',
         formula: cell.formula || '',
+        comments: cell.comments || [],
       };
     });
     setCells(cellsMap);
@@ -406,48 +417,67 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
             {/* Cells */}
             {Array.from({ length: cols }, (_, colIndex) => {
               const key = `${rowIndex}-${colIndex}`;
-              const cellValue = cells[key]?.value || '';
+              const cell = cells[key];
+              const cellValue = cell?.value || '';
+              const hasComments = cell?.comments && cell.comments.length > 0;
               
               return (
-                <div
-                  key={key}
-                  className="w-32 h-10 border-r border-b border-border relative group"
-                >
-                  <input
-                    type="text"
-                    value={cellValue}
-                    onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                    className="w-full h-full px-2 bg-transparent focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:z-10 relative"
-                    placeholder=""
-                    disabled={!canEdit}
-                  />
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => setSelectedCell(key)}
+                <TooltipProvider key={key}>
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={`w-32 h-10 border-r border-b border-border relative group ${hasComments ? 'bg-primary/5' : ''}`}
                       >
-                        <MessageSquarePlus className="w-3 h-3" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64">
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-sm">Add Comment</h4>
-                        <Textarea
-                          value={comment}
-                          onChange={(e) => setComment(e.target.value)}
-                          placeholder="Type your comment..."
-                          rows={3}
+                        <input
+                          type="text"
+                          value={cellValue}
+                          onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                          className="w-full h-full px-2 bg-transparent focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:z-10 relative"
+                          placeholder=""
+                          disabled={!canEdit}
                         />
-                        <Button onClick={handleAddComment} size="sm" className="w-full">
-                          Add Comment
-                        </Button>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => setSelectedCell(key)}
+                            >
+                              <MessageSquarePlus className={`w-3 h-3 ${hasComments ? 'text-primary' : ''}`} />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64">
+                            <div className="space-y-2">
+                              <h4 className="font-medium text-sm">Add Comment</h4>
+                              <Textarea
+                                value={comment}
+                                onChange={(e) => setComment(e.target.value)}
+                                placeholder="Type your comment..."
+                                rows={3}
+                              />
+                              <Button onClick={handleAddComment} size="sm" className="w-full">
+                                Add Comment
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                    </TooltipTrigger>
+                    {hasComments && (
+                      <TooltipContent side="top" className="max-w-xs">
+                        <div className="space-y-1">
+                          {cell.comments?.map((c) => (
+                            <div key={c.id} className="text-xs">
+                              <p className="font-medium">{new Date(c.created_at).toLocaleDateString()}</p>
+                              <p className="text-muted-foreground">{c.comment}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               );
             })}
           </div>
