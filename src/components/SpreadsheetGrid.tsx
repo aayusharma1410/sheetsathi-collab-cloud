@@ -35,7 +35,7 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
   const [pendingChanges, setPendingChanges] = useState<Set<string>>(new Set());
   const [activityLog, setActivityLog] = useState<Array<{
     id: string;
-    user_email: string;
+    user_name: string;
     action: string;
     row_index: number | null;
     col_index: number | null;
@@ -115,18 +115,18 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
       return;
     }
 
-    // Fetch user emails
+    // Fetch user display names
     const userIds = [...new Set(data?.map(log => log.user_id) || [])];
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, email')
+      .select('id, display_name, email')
       .in('id', userIds);
 
-    const emailMap = new Map(profiles?.map(p => [p.id, p.email || 'Unknown']) || []);
+    const nameMap = new Map(profiles?.map(p => [p.id, p.display_name || p.email || 'Unknown']) || []);
 
     setActivityLog(data?.map(log => ({
       ...log,
-      user_email: emailMap.get(log.user_id) || 'Unknown'
+      user_name: nameMap.get(log.user_id) || 'Unknown'
     })) || []);
   };
 
@@ -642,18 +642,23 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
                   <div key={log.id} className="text-xs flex flex-col gap-1 pb-2 border-b border-border last:border-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <span className="font-medium text-foreground">{log.user_email}</span>
+                        <span className="font-semibold text-primary">{log.user_name}</span>
                         <span className="text-muted-foreground"> {log.action}</span>
                       </div>
-                      <span className="text-muted-foreground whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-muted-foreground whitespace-nowrap text-[10px]">
+                        {new Date(log.created_at).toLocaleString([], { 
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
                       </span>
                     </div>
-                    {log.old_value !== null && log.new_value !== null && (
-                      <div className="text-muted-foreground ml-0">
-                        <span className="line-through">{log.old_value || '(empty)'}</span>
-                        <span className="mx-1">→</span>
-                        <span className="text-foreground font-medium">{log.new_value}</span>
+                    {log.old_value !== null && log.new_value !== null && log.old_value !== log.new_value && (
+                      <div className="text-[11px] ml-0 bg-muted/30 px-2 py-1 rounded">
+                        <span className="text-destructive line-through">{log.old_value || '(empty)'}</span>
+                        <span className="mx-2 text-muted-foreground">→</span>
+                        <span className="text-primary font-medium">{log.new_value}</span>
                       </div>
                     )}
                   </div>
