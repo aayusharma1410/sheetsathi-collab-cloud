@@ -102,7 +102,10 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
   };
 
   const handleCellChange = (rowIndex: number, colIndex: number, value: string) => {
+    console.log("Attempting to edit cell - canEdit:", canEdit);
+    
     if (!canEdit) {
+      console.error("Edit blocked - user does not have edit permission");
       toast.error("You don't have permission to edit this spreadsheet");
       return;
     }
@@ -271,17 +274,24 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
           spreadsheet_id: spreadsheetId,
           row_index: rowIndex,
           col_index: colIndex,
-          value: ''
+          value: cells[key]?.value || ''
         })
         .select()
         .single();
       
       cellId = data?.id;
+      
+      if (cellId) {
+        setCells(prev => ({
+          ...prev,
+          [key]: { ...prev[key], id: cellId }
+        }));
+      }
     }
 
     const { data: { user } } = await supabase.auth.getUser();
     
-    await supabase
+    const { error } = await supabase
       .from('comments')
       .insert({
         cell_id: cellId,
@@ -289,9 +299,18 @@ const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, 
         comment: comment.trim()
       });
 
+    if (error) {
+      console.error("Error adding comment:", error);
+      toast.error("Failed to add comment");
+      return;
+    }
+
     toast.success("Comment added");
     setComment("");
     setSelectedCell(null);
+    
+    // Reload cells to get updated comments
+    await loadCells();
   };
 
   const handleSort = (colIndex: number) => {

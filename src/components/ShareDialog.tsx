@@ -34,37 +34,66 @@ export const ShareDialog = ({ spreadsheetId, spreadsheetName }: ShareDialogProps
       return;
     }
 
+    console.log("Sharing with email:", email, "Permission:", permission);
+
     // Find user by email
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profileError } = await supabase
       .from('profiles')
       .select('id')
       .eq('email', email.trim())
       .single();
+
+    console.log("Profile lookup result:", profiles, profileError);
 
     if (!profiles) {
       toast.error("User not found with this email");
       return;
     }
 
-    // Add permission
-    const { error } = await supabase
+    // Check if permission already exists
+    const { data: existingPerm } = await supabase
       .from('spreadsheet_permissions')
-      .insert({
-        spreadsheet_id: spreadsheetId,
-        user_id: profiles.id,
-        permission_level: permission
-      });
+      .select('*')
+      .eq('spreadsheet_id', spreadsheetId)
+      .eq('user_id', profiles.id)
+      .maybeSingle();
 
-    if (error) {
-      if (error.code === '23505') {
-        toast.error("User already has access to this spreadsheet");
-      } else {
-        toast.error("Failed to share spreadsheet");
+    console.log("Existing permission:", existingPerm);
+
+    // Update or insert permission
+    if (existingPerm) {
+      const { error } = await supabase
+        .from('spreadsheet_permissions')
+        .update({ permission_level: permission })
+        .eq('id', existingPerm.id);
+
+      if (error) {
+        console.error("Error updating permission:", error);
+        toast.error("Failed to update permission");
+        return;
       }
-      return;
+      
+      console.log("Permission updated to:", permission);
+      toast.success(`Permission updated to "${permission}" for ${email}`);
+    } else {
+      const { error } = await supabase
+        .from('spreadsheet_permissions')
+        .insert({
+          spreadsheet_id: spreadsheetId,
+          user_id: profiles.id,
+          permission_level: permission
+        });
+
+      if (error) {
+        console.error("Error creating permission:", error);
+        toast.error("Failed to share spreadsheet");
+        return;
+      }
+
+      console.log("New permission created:", permission);
+      toast.success(`Spreadsheet shared with ${email} (${permission})`);
     }
 
-    toast.success(`Spreadsheet shared with ${email}`);
     setEmail("");
     setOpen(false);
   };
