@@ -12,6 +12,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [spreadsheets, setSpreadsheets] = useState<any[]>([]);
+  const [userName, setUserName] = useState("User");
 
   useEffect(() => {
     checkAuth();
@@ -27,6 +28,19 @@ const Dashboard = () => {
 
     setUser(session.user);
     loadSpreadsheets(session.user.id);
+    
+    // Load user profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', session.user.id)
+      .single();
+    
+    if (profile?.display_name) {
+      setUserName(profile.display_name);
+    } else {
+      setUserName(session.user.email?.split('@')[0] || 'User');
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -96,7 +110,7 @@ const Dashboard = () => {
           <div className="mb-6">
             <Sparkles className="w-16 h-16 mx-auto text-primary mb-4" />
             <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-primary via-primary/80 to-primary bg-clip-text text-transparent">
-              Welcome back, {user?.email}
+              Welcome back, {userName}!
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
               Your collaborative spreadsheet workspace

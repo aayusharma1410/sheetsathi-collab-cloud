@@ -90,10 +90,65 @@ export type Database = {
           },
         ]
       }
-      spreadsheets: {
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      spreadsheet_permissions: {
         Row: {
           created_at: string
           id: string
+          permission_level: string
+          spreadsheet_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permission_level: string
+          spreadsheet_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permission_level?: string
+          spreadsheet_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spreadsheet_permissions_spreadsheet_id_fkey"
+            columns: ["spreadsheet_id"]
+            isOneToOne: false
+            referencedRelation: "spreadsheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spreadsheets: {
+        Row: {
+          access_code: string | null
+          created_at: string
+          id: string
+          is_public: boolean | null
           is_template: boolean | null
           name: string
           template_type: string | null
@@ -101,8 +156,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          access_code?: string | null
           created_at?: string
           id?: string
+          is_public?: boolean | null
           is_template?: boolean | null
           name: string
           template_type?: string | null
@@ -110,8 +167,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          access_code?: string | null
           created_at?: string
           id?: string
+          is_public?: boolean | null
           is_template?: boolean | null
           name?: string
           template_type?: string | null

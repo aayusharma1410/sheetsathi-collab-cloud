@@ -29,18 +29,28 @@ const AllSpreadsheets = () => {
   };
 
   const loadSpreadsheets = async (userId: string) => {
-    const { data, error } = await supabase
+    // Load owned spreadsheets
+    const { data: owned, error: ownedError } = await supabase
       .from('spreadsheets')
       .select('*')
       .eq('user_id', userId)
+      .eq('is_template', false)
       .order('updated_at', { ascending: false });
 
-    if (error) {
+    // Load shared spreadsheets
+    const { data: permissions } = await supabase
+      .from('spreadsheet_permissions')
+      .select('spreadsheet_id, spreadsheets(*)')
+      .eq('user_id', userId);
+
+    const shared = permissions?.map(p => (p as any).spreadsheets).filter(Boolean) || [];
+
+    if (ownedError) {
       toast.error("Failed to load spreadsheets");
       return;
     }
 
-    setSpreadsheets(data || []);
+    setSpreadsheets([...(owned || []), ...shared]);
   };
 
   const handleDelete = async (id: string) => {

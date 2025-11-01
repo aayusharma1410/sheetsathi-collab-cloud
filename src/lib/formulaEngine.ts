@@ -39,6 +39,98 @@ export const evaluateFormula = (formula: string, allCells: CellData): string => 
       }
     }
 
+    // MIN function
+    if (formulaContent.startsWith('MIN(')) {
+      const range = formulaContent.match(/MIN\((.*?)\)/)?.[1];
+      if (range) {
+        const values = parseRange(range, allCells).map(v => parseFloat(v)).filter(v => !isNaN(v));
+        if (values.length === 0) return '0';
+        return Math.min(...values).toString();
+      }
+    }
+
+    // MAX function
+    if (formulaContent.startsWith('MAX(')) {
+      const range = formulaContent.match(/MAX\((.*?)\)/)?.[1];
+      if (range) {
+        const values = parseRange(range, allCells).map(v => parseFloat(v)).filter(v => !isNaN(v));
+        if (values.length === 0) return '0';
+        return Math.max(...values).toString();
+      }
+    }
+
+    // PRODUCT function
+    if (formulaContent.startsWith('PRODUCT(')) {
+      const range = formulaContent.match(/PRODUCT\((.*?)\)/)?.[1];
+      if (range) {
+        const values = parseRange(range, allCells);
+        const product = values.reduce((acc, val) => acc * (parseFloat(val) || 0), 1);
+        return product.toString();
+      }
+    }
+
+    // ROUND function
+    if (formulaContent.startsWith('ROUND(')) {
+      const match = formulaContent.match(/ROUND\((.*?),(.*?)\)/);
+      if (match) {
+        const value = parseFloat(match[1].trim());
+        const decimals = parseInt(match[2].trim());
+        if (!isNaN(value) && !isNaN(decimals)) {
+          return value.toFixed(decimals);
+        }
+      }
+    }
+
+    // IF function
+    if (formulaContent.startsWith('IF(')) {
+      const match = formulaContent.match(/IF\((.*?),(.*?),(.*?)\)/);
+      if (match) {
+        const condition = match[1].trim();
+        const trueValue = match[2].trim();
+        const falseValue = match[3].trim();
+        
+        // Simple comparison operators
+        if (condition.includes('>')) {
+          const [left, right] = condition.split('>').map(s => parseFloat(s.trim()));
+          return left > right ? trueValue : falseValue;
+        } else if (condition.includes('<')) {
+          const [left, right] = condition.split('<').map(s => parseFloat(s.trim()));
+          return left < right ? trueValue : falseValue;
+        } else if (condition.includes('=')) {
+          const [left, right] = condition.split('=').map(s => s.trim());
+          return left === right ? trueValue : falseValue;
+        }
+      }
+    }
+
+    // VLOOKUP function (simplified version)
+    if (formulaContent.startsWith('VLOOKUP(')) {
+      const match = formulaContent.match(/VLOOKUP\((.*?),(.*?),(.*?)\)/);
+      if (match) {
+        const lookupValue = match[1].trim();
+        const range = match[2].trim();
+        const colIndex = parseInt(match[3].trim());
+        
+        if (range.includes(':')) {
+          const [start, end] = range.split(':');
+          const startCol = start.charCodeAt(0);
+          const startRow = parseInt(start.substring(1));
+          const endRow = parseInt(end.substring(1));
+          
+          // Search in first column of range
+          for (let row = startRow; row <= endRow; row++) {
+            const cellKey = `${String.fromCharCode(startCol)}${row}`;
+            if (allCells[cellKey] === lookupValue) {
+              // Return value from specified column
+              const resultKey = `${String.fromCharCode(startCol + colIndex - 1)}${row}`;
+              return allCells[resultKey] || '';
+            }
+          }
+        }
+        return '#N/A';
+      }
+    }
+
     // Simple arithmetic operations
     if (/^[\d\s\+\-\*\/\(\)\.]+$/.test(formulaContent)) {
       const result = eval(formulaContent);

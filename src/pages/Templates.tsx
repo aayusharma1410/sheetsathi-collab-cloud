@@ -1,14 +1,24 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Table, ListChecks } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { FileSpreadsheet, ArrowLeft, Plus, Lock, Table, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import type { User } from "@supabase/supabase-js";
 
 const Templates = () => {
   const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+  const [customTemplateName, setCustomTemplateName] = useState("");
+  const [customAccessCode, setCustomAccessCode] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [userTemplates, setUserTemplates] = useState<any[]>([]);
 
-  const templates = [
+  const prebuiltTemplates = [
     {
       id: 'budget',
       name: 'Monthly Budget Sheet',
@@ -52,15 +62,36 @@ const Templates = () => {
     }
   ];
 
-  const createFromTemplate = async (template: typeof templates[0]) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        navigate('/auth');
-        return;
-      }
+  useEffect(() => {
+    checkAuth();
+    loadUserTemplates();
+  }, []);
 
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      navigate("/auth");
+      return;
+    }
+
+    setUser(session.user);
+  };
+
+  const loadUserTemplates = async () => {
+    const { data } = await supabase
+      .from('spreadsheets')
+      .select('*')
+      .eq('is_template', true)
+      .order('created_at', { ascending: false });
+
+    setUserTemplates(data || []);
+  };
+
+  const createFromPrebuiltTemplate = async (template: typeof prebuiltTemplates[0]) => {
+    if (!user) return;
+
+    try {
       // Create spreadsheet
       const { data: spreadsheet, error: sheetError } = await supabase
         .from('spreadsheets')
@@ -96,51 +127,153 @@ const Templates = () => {
     }
   };
 
+  const createCustomTemplate = async () => {
+    if (!user || !customTemplateName.trim()) {
+      toast.error("Please enter a template name");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('spreadsheets')
+      .insert({
+        name: customTemplateName,
+        user_id: user.id,
+        is_template: true,
+        is_public: true,
+        access_code: customAccessCode.trim() || null
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to create template");
+      return;
+    }
+
+    toast.success("Template created! Redirecting to edit...");
+    setIsDialogOpen(false);
+    setCustomTemplateName("");
+    setCustomAccessCode("");
+    navigate(`/sheet/${data.id}`);
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate('/dashboard')}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
-          </Button>
-        </div>
-
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Choose a Template</h1>
-          <p className="text-muted-foreground">
-            Start with a pre-built template to get going faster
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {templates.map((template) => (
-            <Card 
-              key={template.id}
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => createFromTemplate(template)}
-            >
-              <CardHeader>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-3 rounded-lg bg-primary/10">
-                    <template.icon className="w-6 h-6 text-primary" />
-                  </div>
-                  <CardTitle>{template.name}</CardTitle>
-                </div>
-                <CardDescription>{template.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full">
-                  Use This Template
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm shadow-lg">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                Templates
+              </h1>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Template
                 </Button>
-              </CardContent>
-            </Card>
-          ))}
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Your Own Template</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-name">Template Name</Label>
+                    <Input
+                      id="template-name"
+                      placeholder="My Custom Template"
+                      value={customTemplateName}
+                      onChange={(e) => setCustomTemplateName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="access-code">Access Code (Optional)</Label>
+                    <Input
+                      id="access-code"
+                      type="password"
+                      placeholder="Leave empty for public access"
+                      value={customAccessCode}
+                      onChange={(e) => setCustomAccessCode(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Users will need this code to edit your template
+                    </p>
+                  </div>
+                  <Button onClick={createCustomTemplate} className="w-full">
+                    Create Template
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-      </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Pre-made Templates</h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {prebuiltTemplates.map((template) => (
+              <Card key={template.id} className="hover:shadow-xl hover:scale-105 transition-all duration-200 border-primary/20">
+                <CardHeader>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-3 rounded-lg bg-primary/10">
+                      <template.icon className="w-6 h-6 text-primary" />
+                    </div>
+                    <CardTitle>{template.name}</CardTitle>
+                  </div>
+                  <CardDescription>{template.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => createFromPrebuiltTemplate(template)}
+                    className="w-full"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Use Template
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {userTemplates.length > 0 && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Community Templates</h2>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {userTemplates.map((template) => (
+                <Card key={template.id} className="hover:shadow-xl hover:scale-105 transition-all duration-200 border-accent/20">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-5 h-5 text-accent" />
+                      <CardTitle className="text-base">{template.name}</CardTitle>
+                      {template.access_code && <Lock className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                    <CardDescription>Created by community</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button 
+                      onClick={() => navigate(`/sheet/${template.id}`)}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      View Template
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };

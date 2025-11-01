@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { MessageSquarePlus } from "lucide-react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { MessageSquarePlus, Undo, Redo, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,17 +19,26 @@ type SpreadsheetGridProps = {
   rows: number;
   cols: number;
   onCellUpdate?: () => void;
+  canEdit?: boolean;
+  onSave?: () => Promise<void>;
 };
 
-const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: SpreadsheetGridProps) => {
+const SpreadsheetGrid = forwardRef<any, SpreadsheetGridProps>(({ spreadsheetId, rows, cols, onCellUpdate, canEdit = true, onSave }, ref) => {
   const [cells, setCells] = useState<Record<string, CellType>>({});
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [sortConfig, setSortConfig] = useState<{ col: number; direction: 'asc' | 'desc' } | null>(null);
+  const [history, setHistory] = useState<Record<string, CellType>[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [pendingChanges, setPendingChanges] = useState<Set<string>>(new Set());
 
   const columnLabels = Array.from({ length: cols }, (_, i) => 
     String.fromCharCode(65 + i)
   );
+
+  useImperativeHandle(ref, () => ({
+    savePendingChanges
+  }));
 
   useEffect(() => {
     loadCells();
@@ -81,9 +90,21 @@ const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: Spreadshee
     };
   };
 
-  const handleCellChange = async (rowIndex: number, colIndex: number, value: string) => {
+  const handleCellChange = (rowIndex: number, colIndex: number, value: string) => {
+    if (!canEdit) {
+      toast.error("You don't have permission to edit this spreadsheet");
+      return;
+    }
+
     const key = `${rowIndex}-${colIndex}`;
-    const cellId = cells[key]?.id;
+    
+    // Save to history
+    if (historyIndex < history.length - 1) {
+      setHistory(prev => [...prev.slice(0, historyIndex + 1), { ...cells }]);
+    } else {
+      setHistory(prev => [...prev, { ...cells }]);
+    }
+    setHistoryIndex(prev => prev + 1);
 
     // Update local state
     const allCellValues: Record<string, string> = {};
@@ -102,25 +123,126 @@ const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: Spreadshee
       [key]: { ...prev[key], value: displayValue, formula: value }
     }));
 
-    // Save to database
-    if (cellId) {
-      await supabase
-        .from('cells')
-        .update({ value: displayValue, formula: value.startsWith('=') ? value : null })
-        .eq('id', cellId);
-    } else {
-      await supabase
-        .from('cells')
-        .insert({
-          spreadsheet_id: spreadsheetId,
-          row_index: rowIndex,
-          col_index: colIndex,
-          value: displayValue,
-          formula: value.startsWith('=') ? value : null
-        });
+    // Mark as pending change (will save when user clicks Save)
+    setPendingChanges(prev => new Set(prev).add(key));
+    onCellUpdate?.();
+  };
+
+  const savePendingChanges = async () => {
+    if (!canEdit || pendingChanges.size === 0) return;
+
+    const changesToSave = Array.from(pendingChanges).map(key => {
+      const [rowIndex, colIndex] = key.split('-').map(Number);
+      const cell = cells[key];
+      return {
+        key,
+        rowIndex,
+        colIndex,
+        cell
+      };
+    });
+
+    for (const { key, rowIndex, colIndex, cell } of changesToSave) {
+      const cellId = cell?.id;
+      
+      if (cellId) {
+        await supabase
+          .from('cells')
+          .update({ 
+            value: cell.value, 
+            formula: cell.formula?.startsWith('=') ? cell.formula : null 
+          })
+          .eq('id', cellId);
+      } else {
+        const { data } = await supabase
+          .from('cells')
+          .insert({
+            spreadsheet_id: spreadsheetId,
+            row_index: rowIndex,
+            col_index: colIndex,
+            value: cell.value,
+            formula: cell.formula?.startsWith('=') ? cell.formula : null
+          })
+          .select()
+          .single();
+
+        if (data) {
+          setCells(prev => ({
+            ...prev,
+            [key]: { ...prev[key], id: data.id }
+          }));
+        }
+      }
     }
 
-    onCellUpdate?.();
+    setPendingChanges(new Set());
+    await onSave?.();
+  };
+
+  const undo = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(prev => prev - 1);
+      setCells(history[historyIndex - 1]);
+      setPendingChanges(prev => {
+        const newSet = new Set(prev);
+        Object.keys(cells).forEach(key => newSet.add(key));
+        return newSet;
+      });
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(prev => prev + 1);
+      setCells(history[historyIndex + 1]);
+      setPendingChanges(prev => {
+        const newSet = new Set(prev);
+        Object.keys(cells).forEach(key => newSet.add(key));
+        return newSet;
+      });
+    }
+  };
+
+  const deleteRow = async (rowIndex: number) => {
+    if (!canEdit) {
+      toast.error("You don't have permission to delete rows");
+      return;
+    }
+
+    const cellsToDelete = Object.keys(cells).filter(key => 
+      parseInt(key.split('-')[0]) === rowIndex
+    );
+
+    for (const key of cellsToDelete) {
+      const cellId = cells[key]?.id;
+      if (cellId) {
+        await supabase.from('cells').delete().eq('id', cellId);
+      }
+    }
+
+    loadCells();
+    toast.success("Row deleted");
+  };
+
+  const deleteColumn = async (colIndex: number) => {
+    if (!canEdit) {
+      toast.error("You don't have permission to delete columns");
+      return;
+    }
+
+    const cellsToDelete = Object.keys(cells).filter(key => 
+      parseInt(key.split('-')[1]) === colIndex
+    );
+
+    for (const key of cellsToDelete) {
+      const cellId = cells[key]?.id;
+      if (cellId) {
+        await supabase.from('cells').delete().eq('id', cellId);
+      }
+    }
+
+    loadCells();
+    toast.success("Column deleted");
   };
 
   const handleAddComment = async () => {
@@ -192,6 +314,44 @@ const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: Spreadshee
 
   return (
     <div className="inline-block min-w-full">
+      {/* Toolbar */}
+      <div className="mb-4 flex gap-2 items-center">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={undo}
+          disabled={historyIndex <= 0 || !canEdit}
+        >
+          <Undo className="w-4 h-4 mr-2" />
+          Undo
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={redo}
+          disabled={historyIndex >= history.length - 1 || !canEdit}
+        >
+          <Redo className="w-4 h-4 mr-2" />
+          Redo
+        </Button>
+        {pendingChanges.size > 0 && (
+          <span className="text-sm text-muted-foreground ml-4">
+            {pendingChanges.size} unsaved {pendingChanges.size === 1 ? 'change' : 'changes'}
+          </span>
+        )}
+        {onSave && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={savePendingChanges}
+            disabled={pendingChanges.size === 0 || !canEdit}
+            className="ml-auto"
+          >
+            Save Changes
+          </Button>
+        )}
+      </div>
+
       <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
         {/* Column Headers */}
         <div className="flex sticky top-0 z-10 bg-secondary">
@@ -199,14 +359,28 @@ const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: Spreadshee
           {columnLabels.map((label, colIndex) => (
             <div
               key={label}
-              className="w-32 h-10 border-r border-b border-border flex items-center justify-center text-sm font-medium cursor-pointer hover:bg-accent/50"
-              onClick={() => handleSort(colIndex)}
+              className="w-32 h-10 border-r border-b border-border flex items-center justify-center text-sm font-medium group relative"
             >
-              {label}
-              {sortConfig?.col === colIndex && (
-                <span className="ml-1 text-xs">
-                  {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                </span>
+              <span 
+                className="cursor-pointer hover:text-primary"
+                onClick={() => handleSort(colIndex)}
+              >
+                {label}
+                {sortConfig?.col === colIndex && (
+                  <span className="ml-1 text-xs">
+                    {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
+              </span>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 h-full px-1 opacity-0 group-hover:opacity-100"
+                  onClick={() => deleteColumn(colIndex)}
+                >
+                  <Trash2 className="w-3 h-3 text-destructive" />
+                </Button>
               )}
             </div>
           ))}
@@ -214,10 +388,20 @@ const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: Spreadshee
 
         {/* Rows */}
         {Array.from({ length: rows }, (_, rowIndex) => (
-          <div key={rowIndex} className="flex hover:bg-accent/5">
+          <div key={rowIndex} className="flex hover:bg-accent/5 group">
             {/* Row Number */}
-            <div className="w-12 h-10 border-r border-b border-border flex items-center justify-center text-xs font-medium bg-secondary">
-              {rowIndex + 1}
+            <div className="w-12 h-10 border-r border-b border-border flex items-center justify-center text-xs font-medium bg-secondary relative">
+              <span>{rowIndex + 1}</span>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 h-full px-1 opacity-0 group-hover:opacity-100"
+                  onClick={() => deleteRow(rowIndex)}
+                >
+                  <Trash2 className="w-3 h-3 text-destructive" />
+                </Button>
+              )}
             </div>
             {/* Cells */}
             {Array.from({ length: cols }, (_, colIndex) => {
@@ -235,6 +419,7 @@ const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: Spreadshee
                     onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
                     className="w-full h-full px-2 bg-transparent focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:z-10 relative"
                     placeholder=""
+                    disabled={!canEdit}
                   />
                   <Popover>
                     <PopoverTrigger asChild>
@@ -270,6 +455,8 @@ const SpreadsheetGrid = ({ spreadsheetId, rows, cols, onCellUpdate }: Spreadshee
       </div>
     </div>
   );
-};
+});
+
+SpreadsheetGrid.displayName = 'SpreadsheetGrid';
 
 export default SpreadsheetGrid;
